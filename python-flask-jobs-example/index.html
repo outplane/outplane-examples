@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flask Background Jobs Demo</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #111827;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --border: #1f2937;
+      --success: #10b981;
+      --warn: #f59e0b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: radial-gradient(120% 120% at 20% 20%, rgba(56,189,248,0.08), transparent 40%),
+                  radial-gradient(120% 120% at 80% 0%, rgba(16,185,129,0.08), transparent 40%),
+                  var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    .shell {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 32px 16px 48px;
+    }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    p { margin: 0 0 12px; color: var(--muted); }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 12px;
+    }
+    .input-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    input, button {
+      font: inherit;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      padding: 10px 12px;
+      background: #0b1222;
+      color: var(--text);
+    }
+    input { flex: 1; min-width: 200px; }
+    button {
+      background: linear-gradient(135deg, #38bdf8, #0ea5e9);
+      color: #0b1222;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+      transition: transform 0.1s ease, box-shadow 0.2s ease;
+      box-shadow: 0 10px 30px rgba(14,165,233,0.35);
+    }
+    button:hover { transform: translateY(-1px); }
+    button:active { transform: translateY(0); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+    }
+    th, td {
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      font-size: 14px;
+    }
+    th { color: var(--muted); font-weight: 600; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      color: var(--text);
+      background: rgba(255,255,255,0.03);
+      font-size: 12px;
+    }
+    .status {
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-weight: 600;
+      font-size: 12px;
+      border: 1px solid var(--border);
+    }
+    .queued { color: #f59e0b; background: rgba(245,158,11,0.1); }
+    .processing { color: #38bdf8; background: rgba(56,189,248,0.1); }
+    .done { color: #10b981; background: rgba(16,185,129,0.1); }
+    .error { color: #f87171; background: rgba(248,113,113,0.1); }
+    small { color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+      <div>
+        <h1>Flask Background Jobs</h1>
+        <p>Enqueue fake jobs, see them processed by APScheduler (no Redis needed).</p>
+      </div>
+      <div class="badge">
+        <span id="queueDepth">Queue: 0</span>
+        <span id="jobCount">Jobs: 0</span>
+      </div>
+    </div>
+
+    <div class="card" style="margin:14px 0;">
+      <div class="input-row">
+        <input id="description" type="text" placeholder="Job description (optional)" />
+        <button id="enqueueBtn">Enqueue Job</button>
+      </div>
+      <small>Processes one job every 2 seconds. Refreshing automatically.</small>
+    </div>
+
+    <div class="card">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+        <h3 style="margin:0;">Jobs</h3>
+        <small id="lastUpdated">Updated: -</small>
+      </div>
+      <div style="overflow:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Description</th>
+              <th>Status</th>
+              <th>Attempts</th>
+              <th>Created</th>
+              <th>Started</th>
+              <th>Finished</th>
+            </tr>
+          </thead>
+          <tbody id="jobsBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const enqueueBtn = document.getElementById("enqueueBtn");
+    const descInput = document.getElementById("description");
+    const jobsBody = document.getElementById("jobsBody");
+    const queueDepthEl = document.getElementById("queueDepth");
+    const jobCountEl = document.getElementById("jobCount");
+    const lastUpdatedEl = document.getElementById("lastUpdated");
+
+    enqueueBtn.addEventListener("click", async () => {
+      const description = descInput.value.trim();
+      enqueueBtn.disabled = true;
+      enqueueBtn.textContent = "Enqueuing...";
+      try {
+        await fetch("/enqueue", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(description ? { description } : {}),
+        });
+        descInput.value = "";
+        await loadJobs();
+      } catch (err) {
+        alert("Failed to enqueue job");
+      } finally {
+        enqueueBtn.disabled = false;
+        enqueueBtn.textContent = "Enqueue Job";
+      }
+    });
+
+    async function loadJobs() {
+      try {
+        const res = await fetch("/jobs");
+        const data = await res.json();
+        queueDepthEl.textContent = `Queue: ${data.queueDepth ?? 0}`;
+        jobCountEl.textContent = `Jobs: ${data.count ?? data.jobs?.length ?? 0}`;
+        lastUpdatedEl.textContent = `Updated: ${new Date().toLocaleTimeString()}`;
+
+        jobsBody.innerHTML = "";
+        (data.jobs || []).forEach(job => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td><code>${job.id}</code></td>
+            <td>${job.description || ""}</td>
+            <td><span class="status ${job.status}">${job.status}</span></td>
+            <td>${job.attempts}</td>
+            <td><small>${job.createdAt ?? "-"}</small></td>
+            <td><small>${job.startedAt ?? "-"}</small></td>
+            <td><small>${job.finishedAt ?? "-"}</small></td>
+          `;
+          jobsBody.appendChild(tr);
+        });
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    loadJobs();
+    setInterval(loadJobs, 2000);
+  </script>
+</body>
+</html>
