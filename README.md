@@ -21,6 +21,7 @@ Then open http://localhost:8080
 - `php-laravel-example`: Laravel UI showing request/env/runtime.
 - `nextjs-example`: Next.js single page with random science facts.
 - `docusaurus-example`: Docusaurus docs site with a custom landing page.
+- `metabase-example`: Metabase analytics UI.
 - `java-springboot-example`: Spring Boot (Undertow) API returning request/env info.
 - `dotnet-minimal-api-example`: ASP.NET Core 8 minimal API returning request/env/runtime.
 
