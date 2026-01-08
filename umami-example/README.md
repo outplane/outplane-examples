@@ -2,6 +2,8 @@
 
 Umami web analytics running on port 3000 for Out Plane testing.
 
+Docs: https://umami.is/docs
+
 ## Environment Variables
 
 - `DATABASE_URL` - PostgreSQL connection string (e.g., `postgresql://umami:umami@db:5432/umami`)
