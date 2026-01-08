@@ -1,6 +1,7 @@
 # Umami Example
 
 Umami web analytics running on port 3000 for Out Plane testing.
+
 Docs: https://umami.is/docs
 
 ## Environment Variables
