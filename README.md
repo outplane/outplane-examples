@@ -23,6 +23,7 @@ Then open http://localhost:8080
 - `docusaurus-example`: Docusaurus docs site with a custom landing page.
 - `metabase-example`: Metabase analytics UI.
 - `umami-example`: Umami web analytics with PostgreSQL.
+- `volume-explorer`: Go app to browse, upload, and manage files in volumes.
 - `java-springboot-example`: Spring Boot (Undertow) API returning request/env info.
 - `dotnet-minimal-api-example`: ASP.NET Core 8 minimal API returning request/env/runtime.
 
