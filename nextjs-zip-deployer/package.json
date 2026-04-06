@@ -1,0 +1,12 @@
+{
+  "name": "nextjs-zip-deployer",
+  "version": "1.0.0",
+  "description": "Upload a Next.js project as ZIP and deploy it instantly",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
