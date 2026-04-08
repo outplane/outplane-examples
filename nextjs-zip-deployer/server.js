@@ -109,8 +109,11 @@ function maybeInstall() {
   }
 
   console.log("[deployer] Lockfile changed (or first deploy), running pnpm install...");
+  // --shamefully-hoist emulates npm's flat node_modules layout, so projects
+  // that rely on hoisted transitive deps (common with npm-authored projects)
+  // still resolve correctly.
   execSync(
-    `pnpm install --prefer-offline --store-dir=${PNPM_STORE} --config.confirmModulesPurge=false`,
+    `pnpm install --prefer-offline --shamefully-hoist --store-dir=${PNPM_STORE} --config.confirmModulesPurge=false`,
     {
       cwd: WORKSPACE,
       stdio: "inherit",
