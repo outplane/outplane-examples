@@ -3,61 +3,70 @@ const { execSync, spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
+const crypto = require("crypto");
 
 const UPLOAD_PORT = 4000;
 const APP_PORT = 3000;
-const WORKSPACE = "/tmp/workspace";
+const WORKSPACE = "/workspace/app";
+const STAGING = "/workspace/staging";
+const PNPM_STORE = "/workspace/.pnpm-store";
+const LOCK_HASH_FILE = "/workspace/.lockhash";
 const MAX_ZIP_SIZE = 200 * 1024 * 1024; // 200MB
 
 let appProcess = null;
+let deploying = false;
 
 function json(res, status, data) {
   res.writeHead(status, { "Content-Type": "application/json" });
   res.end(JSON.stringify(data));
 }
 
-function killApp() {
-  if (appProcess) {
-    console.log("[deployer] Killing existing app (pid: %d)", appProcess.pid);
-    appProcess.kill("SIGTERM");
-    // Force kill after 5s
-    const pid = appProcess.pid;
-    setTimeout(() => {
-      try {
-        process.kill(pid, "SIGKILL");
-      } catch {}
-    }, 5000);
-    appProcess = null;
+function ensureDirs() {
+  for (const d of [WORKSPACE, STAGING, PNPM_STORE]) {
+    fs.mkdirSync(d, { recursive: true });
   }
 }
 
-function cleanup() {
-  if (fs.existsSync(WORKSPACE)) {
-    fs.rmSync(WORKSPACE, { recursive: true, force: true });
+function hashFile(file) {
+  if (!fs.existsSync(file)) return null;
+  return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+}
+
+function readStoredHash() {
+  try {
+    return fs.readFileSync(LOCK_HASH_FILE, "utf-8").trim();
+  } catch {
+    return null;
   }
-  fs.mkdirSync(WORKSPACE, { recursive: true });
+}
+
+function writeStoredHash(hash) {
+  fs.writeFileSync(LOCK_HASH_FILE, hash || "");
 }
 
 function extractZip(zipPath) {
-  // Use unzip CLI (available in alpine with apk add unzip)
-  execSync(`unzip -o -q "${zipPath}" -d "${WORKSPACE}"`, { stdio: "pipe" });
+  // Clean staging, extract into it
+  fs.rmSync(STAGING, { recursive: true, force: true });
+  fs.mkdirSync(STAGING, { recursive: true });
+
+  execSync(`unzip -o -q "${zipPath}" -d "${STAGING}"`, { stdio: "pipe" });
 
   // If zip contains a single root folder, move contents up
-  const entries = fs.readdirSync(WORKSPACE).filter((e) => e !== "__MACOSX");
+  const entries = fs.readdirSync(STAGING).filter((e) => e !== "__MACOSX");
   if (entries.length === 1) {
-    const inner = path.join(WORKSPACE, entries[0]);
+    const inner = path.join(STAGING, entries[0]);
     if (fs.statSync(inner).isDirectory()) {
       const innerEntries = fs.readdirSync(inner);
       for (const entry of innerEntries) {
-        fs.renameSync(path.join(inner, entry), path.join(WORKSPACE, entry));
+        fs.renameSync(path.join(inner, entry), path.join(STAGING, entry));
       }
       fs.rmdirSync(inner);
     }
   }
 }
 
-function validateProject() {
-  const pkgPath = path.join(WORKSPACE, "package.json");
+function validateStaging() {
+  const pkgPath = path.join(STAGING, "package.json");
   if (!fs.existsSync(pkgPath)) {
     throw new Error("No package.json found in ZIP root");
   }
@@ -68,76 +77,96 @@ function validateProject() {
     throw new Error("Not a Next.js project (no 'next' dependency)");
   }
 
-  if (!pkg.scripts?.build) {
-    throw new Error("No 'build' script in package.json");
-  }
-
   return pkg;
 }
 
-function installAndBuild() {
-  console.log("[deployer] Installing dependencies...");
-  execSync("npm install --production=false", {
-    cwd: WORKSPACE,
-    stdio: "inherit",
-    timeout: 300000, // 5 min
-  });
-
-  console.log("[deployer] Building Next.js app...");
-  execSync("npm run build", {
-    cwd: WORKSPACE,
-    stdio: "inherit",
-    timeout: 300000,
-    env: { ...process.env, NODE_ENV: "production" },
-  });
+function syncToWorkspace() {
+  // rsync preserves node_modules in workspace (excluded) so HMR picks up
+  // file changes and we don't nuke installed deps
+  console.log("[deployer] Syncing files into live workspace...");
+  execSync(
+    `rsync -a --delete --exclude=node_modules --exclude=.next "${STAGING}/" "${WORKSPACE}/"`,
+    { stdio: "inherit" }
+  );
 }
 
-function startApp() {
-  return new Promise((resolve, reject) => {
-    console.log("[deployer] Starting Next.js on port %d...", APP_PORT);
+function maybeInstall() {
+  const lockCandidates = ["pnpm-lock.yaml", "package-lock.json", "yarn.lock", "package.json"];
+  let lockFile = null;
+  for (const f of lockCandidates) {
+    if (fs.existsSync(path.join(WORKSPACE, f))) {
+      lockFile = f;
+      break;
+    }
+  }
 
-    const child = spawn("npx", ["next", "start", "-p", String(APP_PORT)], {
+  const currentHash = hashFile(path.join(WORKSPACE, lockFile));
+  const storedHash = readStoredHash();
+
+  if (currentHash && currentHash === storedHash && fs.existsSync(path.join(WORKSPACE, "node_modules"))) {
+    console.log("[deployer] Lockfile unchanged, skipping install");
+    return false;
+  }
+
+  console.log("[deployer] Lockfile changed (or first deploy), running pnpm install...");
+  execSync(
+    `pnpm install --prefer-offline --store-dir=${PNPM_STORE} --config.confirmModulesPurge=false`,
+    {
       cwd: WORKSPACE,
-      stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env, NODE_ENV: "production", PORT: String(APP_PORT) },
-    });
+      stdio: "inherit",
+      timeout: 300000,
+      env: { ...process.env, CI: "1" },
+    }
+  );
 
-    let started = false;
-    const timeout = setTimeout(() => {
-      if (!started) {
-        started = true;
-        // Give it benefit of the doubt
-        resolve(child);
-      }
-    }, 10000);
+  writeStoredHash(currentHash);
+  return true;
+}
 
-    child.stdout.on("data", (data) => {
-      const msg = data.toString();
-      process.stdout.write("[app] " + msg);
-      if (!started && (msg.includes("Ready") || msg.includes(String(APP_PORT)))) {
-        started = true;
-        clearTimeout(timeout);
-        resolve(child);
-      }
-    });
+function isAppAlive() {
+  return appProcess !== null && !appProcess.killed && appProcess.exitCode === null;
+}
 
-    child.stderr.on("data", (data) => {
-      process.stderr.write("[app:err] " + data.toString());
-    });
+function startDevServer() {
+  if (isAppAlive()) return;
 
-    child.on("exit", (code) => {
-      console.log("[deployer] App process exited with code %d", code);
-      if (appProcess === child) appProcess = null;
-      if (!started) {
-        started = true;
-        clearTimeout(timeout);
-        reject(new Error(`App exited with code ${code}`));
-      }
-    });
+  console.log("[deployer] Starting next dev on port %d...", APP_PORT);
+  const child = spawn("pnpm", ["exec", "next", "dev", "-p", String(APP_PORT), "-H", "0.0.0.0"], {
+    cwd: WORKSPACE,
+    stdio: ["ignore", "pipe", "pipe"],
+    detached: true,
+    env: { ...process.env, NODE_ENV: "development", PORT: String(APP_PORT) },
   });
+
+  child.stdout.on("data", (data) => process.stdout.write("[app] " + data));
+  child.stderr.on("data", (data) => process.stderr.write("[app:err] " + data));
+  child.on("exit", (code) => {
+    console.log("[deployer] next dev exited with code %d", code);
+    if (appProcess === child) appProcess = null;
+  });
+
+  appProcess = child;
+}
+
+function killApp() {
+  if (!appProcess) return;
+  try {
+    process.kill(-appProcess.pid, "SIGTERM");
+  } catch {}
+  const pid = appProcess.pid;
+  setTimeout(() => {
+    try {
+      process.kill(-pid, "SIGKILL");
+    } catch {}
+  }, 5000);
+  appProcess = null;
 }
 
 async function handleUpload(req, res) {
+  if (deploying) {
+    return json(res, 429, { error: "Another deploy is in progress" });
+  }
+
   const contentType = req.headers["content-type"] || "";
   if (!contentType.includes("multipart/form-data") && !contentType.includes("application/zip")) {
     return json(res, 400, {
@@ -145,18 +174,21 @@ async function handleUpload(req, res) {
     });
   }
 
+  deploying = true;
+  const t0 = Date.now();
+
   try {
     const zipPath = path.join(os.tmpdir(), `upload-${Date.now()}.zip`);
     let bytesReceived = 0;
 
     if (contentType.includes("application/zip")) {
-      // Raw binary upload
       await new Promise((resolve, reject) => {
         const ws = fs.createWriteStream(zipPath);
         req.on("data", (chunk) => {
           bytesReceived += chunk.length;
           if (bytesReceived > MAX_ZIP_SIZE) {
             req.destroy();
+            ws.destroy();
             reject(new Error(`ZIP exceeds ${MAX_ZIP_SIZE / 1024 / 1024}MB limit`));
           }
           ws.write(chunk);
@@ -167,7 +199,6 @@ async function handleUpload(req, res) {
         ws.on("finish", resolve);
       });
     } else {
-      // Multipart form-data: parse boundary manually (no deps)
       await new Promise((resolve, reject) => {
         const boundary = contentType.split("boundary=")[1];
         if (!boundary) return reject(new Error("No boundary in multipart"));
@@ -185,7 +216,6 @@ async function handleUpload(req, res) {
           const buffer = Buffer.concat(chunks);
           const boundaryBuf = Buffer.from(`--${boundary}`);
 
-          // Find file content between headers and next boundary
           const headerEnd = buffer.indexOf("\r\n\r\n");
           if (headerEnd === -1) return reject(new Error("Invalid multipart"));
 
@@ -202,39 +232,63 @@ async function handleUpload(req, res) {
 
     console.log("[deployer] Received ZIP (%d bytes)", bytesReceived);
 
-    // Deploy pipeline
-    killApp();
-    cleanup();
+    // --- Fast path pipeline ---
+    // 1. extract to staging (workspace is untouched, app still alive)
+    // 2. validate
+    // 3. rsync staging -> workspace (next dev picks up changes via HMR)
+    // 4. install only if lockfile hash changed
+    // 5. make sure next dev is running; if not (first deploy), start it
 
-    console.log("[deployer] Extracting ZIP...");
+    console.log("[deployer] Extracting ZIP into staging...");
     extractZip(zipPath);
     fs.unlinkSync(zipPath);
 
-    const pkg = validateProject();
+    const pkg = validateStaging();
     console.log("[deployer] Project: %s@%s", pkg.name || "unnamed", pkg.version || "0.0.0");
 
-    installAndBuild();
-    appProcess = await startApp();
+    syncToWorkspace();
 
+    const installed = maybeInstall();
+
+    // If install happened we restart dev, because next dev's module graph
+    // doesn't always pick up a fresh node_modules; otherwise keep it alive
+    // and rely on HMR.
+    if (installed && isAppAlive()) {
+      console.log("[deployer] Deps changed, restarting next dev...");
+      killApp();
+      await new Promise((r) => setTimeout(r, 500));
+    }
+
+    startDevServer();
+
+    const elapsed = Date.now() - t0;
     json(res, 200, {
       status: "deployed",
       name: pkg.name || "unnamed",
       version: pkg.version || "0.0.0",
       port: APP_PORT,
-      message: `App is running on port ${APP_PORT}`,
+      installed,
+      elapsed_ms: elapsed,
+      message: installed
+        ? `Deps reinstalled, next dev restarted in ${elapsed}ms`
+        : `Files synced, HMR picked up changes in ${elapsed}ms`,
     });
   } catch (err) {
     console.error("[deployer] Deploy failed:", err.message);
     json(res, 500, { error: err.message });
+  } finally {
+    deploying = false;
   }
 }
 
 function handleStatus(res) {
   json(res, 200, {
-    running: appProcess !== null && !appProcess.killed,
+    running: isAppAlive(),
     pid: appProcess?.pid || null,
-    port: appProcess ? APP_PORT : null,
-    workspace: fs.existsSync(path.join(WORKSPACE, "package.json")),
+    port: isAppAlive() ? APP_PORT : null,
+    deploying,
+    workspace_ready: fs.existsSync(path.join(WORKSPACE, "package.json")),
+    lockfile_hash: readStoredHash(),
   });
 }
 
@@ -262,6 +316,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "GET" && url.pathname === "/") {
     return json(res, 200, {
       service: "nextjs-zip-deployer",
+      mode: "next dev + HMR (fast redeploy)",
       endpoints: {
         "POST /upload": "Upload ZIP (application/zip or multipart/form-data field 'file')",
         "GET /status": "Check deployed app status",
@@ -275,12 +330,20 @@ const server = http.createServer(async (req, res) => {
   json(res, 404, { error: "Not found" });
 });
 
+ensureDirs();
+
 server.listen(UPLOAD_PORT, () => {
   console.log("[deployer] Upload API listening on port %d", UPLOAD_PORT);
-  console.log("[deployer] Deployed apps will run on port %d", APP_PORT);
+  console.log("[deployer] Deployed app will run on port %d", APP_PORT);
+
+  // If workspace already has a project (persistent volume across restarts),
+  // bring next dev back up immediately — no upload needed.
+  if (fs.existsSync(path.join(WORKSPACE, "package.json")) && fs.existsSync(path.join(WORKSPACE, "node_modules"))) {
+    console.log("[deployer] Found existing workspace, auto-starting next dev");
+    startDevServer();
+  }
 });
 
-// Graceful shutdown
 process.on("SIGTERM", () => {
   console.log("[deployer] Shutting down...");
   killApp();
