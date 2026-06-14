@@ -24,9 +24,9 @@ EXPOSE 8080
 ENV PORT=8080
 ENV VOLUME_PATH=/data
 
-# Run as non-root user
-RUN adduser -D -u 1000 appuser
-RUN chown -R appuser:appuser /data
-USER appuser
+# Run as root: hcloud block PVCs mount as root:root, so a non-root user can't
+# write to /data. Running as root lets the app write the mounted volume out of
+# the box (same approach Railway/Fly use for volume-backed apps).
+USER root
 
 CMD ["/usr/local/bin/server"]
