@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>It is live</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='4' fill='%23111'/><rect x='4' y='7' width='8' height='2' rx='1' fill='%23fff'/></svg>">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<main>
+
+  <p class="eyebrow">First deployment</p>
+  <h1>It is live.</h1>
+  <p class="lede">
+    This page is being served by an application you just deployed on Out Plane, built from a
+    public repository and wired to a managed PostgreSQL database. <strong>Nothing here is a
+    mock.</strong> Every value below was read from your own deployment when you loaded this
+    page.
+  </p>
+
+  <dl class="facts" id="facts"></dl>
+
+  <section>
+    <h2>Connect the application to its database</h2>
+    <div class="panel">
+      <div class="game-head">
+        <p>Click a tile to rotate it. Complete the run from <strong>APP</strong> to <strong>DB</strong>.</p>
+        <p class="counters">level <b id="c-level">1</b> &nbsp; moves <b id="c-moves">0</b> &nbsp; <b id="c-time">0.0</b>s</p>
+      </div>
+      <div class="board-wrap"><div class="board" id="board"></div></div>
+      <div class="won" id="won" hidden></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>What is in your database right now</h2>
+    <div class="panel" id="rows"></div>
+  </section>
+
+  <section>
+    <h2>Keep going</h2>
+    <div class="actions">
+      <a class="btn solid" href="https://console.outplane.com" target="_blank" rel="noreferrer">Open the console</a>
+      <a class="btn" href="https://docs.outplane.com" target="_blank" rel="noreferrer">Read the docs</a>
+      <a class="btn" href="https://docs.outplane.com/docs/cli/agents" target="_blank" rel="noreferrer">Give your agent the runbook</a>
+    </div>
+  </section>
+
+  <footer>
+    <p>
+      This example is open source at
+      <a href="https://github.com/outplane/outplane-examples" target="_blank" rel="noreferrer">github.com/outplane/outplane-examples</a>,
+      under <code>agent-quickstart</code>. Delete the application and the database when you are
+      finished with them, and nothing is left behind.
+    </p>
+  </footer>
+
+</main>
+<script src="/app.js"></script>
+</body>
+</html>

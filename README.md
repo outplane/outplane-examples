@@ -13,6 +13,7 @@ docker build -t <example-name> . && docker run --rm -p 8080:8080 <example-name>
 Then open http://localhost:8080
 
 ## Examples
+- `agent-quickstart`: Go app plus managed PostgreSQL, for a first deployment driven by a coding agent. Runs without a database too.
 - `express-nodejs-example`: Express API with `/info`, `/animals`, Swagger UI.
 - `go-example`: Minimal Go HTTP server returning env + user agent.
 - `python-fastapi-example`: FastAPI echoing env/headers/runtime.

@@ -1,0 +1,279 @@
+/*
+ * The Out Plane console's tokens, carried across so this page belongs to the
+ * same product as the one the person will open next. Both typefaces are served
+ * from the binary, so the page needs no network beyond itself.
+ */
+
+@font-face {
+  font-family: 'Archivo';
+  src: url('/fonts/archivo-wght.woff2') format('woff2-variations');
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  src: url('/fonts/plex-mono-400.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  src: url('/fonts/plex-mono-500.woff2') format('woff2');
+  font-weight: 500;
+  font-display: swap;
+}
+
+:root {
+  --radius: 0.5rem;
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+
+  --font-sans: 'Archivo', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', monospace;
+
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --border: oklch(0.922 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --live: oklch(0.62 0.15 150);
+  --idle: oklch(0.65 0.02 260);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.185 0 0);
+    --muted: oklch(0.235 0 0);
+    --muted-foreground: oklch(0.65 0 0);
+    --border: oklch(0.28 0 0);
+    --primary: oklch(0.985 0 0);
+    --primary-foreground: oklch(0.205 0 0);
+    --live: oklch(0.72 0.16 150);
+    --idle: oklch(0.5 0.02 260);
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 3rem 1.5rem 5rem;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+main { max-width: 62rem; margin: 0 auto; }
+
+code, .mono { font-family: var(--font-mono); font-size: 0.86em; }
+
+/* Header ------------------------------------------------------------------ */
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  margin: 0 0 0.75rem;
+}
+
+h1 {
+  font-size: clamp(2.25rem, 6vw, 3.5rem);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  margin: 0 0 1rem;
+}
+
+.lede {
+  font-size: 1.05rem;
+  color: var(--muted-foreground);
+  max-width: 46rem;
+  margin: 0 0 2rem;
+}
+
+.lede strong { color: var(--foreground); font-weight: 500; }
+
+/* Facts ------------------------------------------------------------------- */
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 2.5rem;
+}
+
+.fact {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--card);
+  padding: 0.875rem 1rem;
+  min-width: 0;
+}
+
+.fact dt {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  margin-bottom: 0.3rem;
+}
+
+.fact dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  margin-right: 0.4rem;
+  vertical-align: 0.05em;
+  background: var(--idle);
+}
+.dot.on { background: var(--live); }
+
+/* Sections ---------------------------------------------------------------- */
+
+section { margin-bottom: 2.5rem; }
+
+h2 {
+  font-size: 0.8rem;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  margin: 0 0 0.9rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--card);
+  padding: 1.25rem;
+}
+
+/* Board ------------------------------------------------------------------- */
+
+.game-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.game-head p { margin: 0; color: var(--muted-foreground); font-size: 0.9rem; }
+
+.counters { font-family: var(--font-mono); font-size: 0.85rem; color: var(--muted-foreground); }
+.counters b { color: var(--foreground); font-weight: 500; }
+
+.board-wrap { display: flex; justify-content: center; }
+
+.board {
+  display: grid;
+  gap: 3px;
+  touch-action: manipulation;
+}
+
+.cell {
+  width: 100%;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--muted);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.cell:hover:not(.fixed) { border-color: var(--muted-foreground); }
+.cell.fixed { cursor: default; background: var(--card); }
+.cell.powered { background: color-mix(in oklab, var(--live) 14%, var(--card)); border-color: var(--live); }
+
+.cell svg { width: 100%; height: 100%; display: block; }
+.cell .pipe {
+  stroke: var(--muted-foreground);
+  stroke-width: 9;
+  stroke-linecap: round;
+  fill: none;
+  transition: stroke 0.12s ease;
+}
+.cell.powered .pipe { stroke: var(--live); }
+.cell .rot { transform-origin: 50% 50%; transition: transform 0.16s cubic-bezier(0.2, 0, 0, 1); }
+
+/* The endpoint chip. Opaque, so the cable reads as plugging into it. */
+.cell .chip { fill: var(--card); stroke: var(--border); stroke-width: 3; }
+.cell .glyph { fill: var(--muted-foreground); }
+.cell.powered .chip { stroke: var(--live); }
+.cell.powered .glyph { fill: var(--live); }
+
+.won {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--live);
+  border-radius: var(--radius-md);
+  background: color-mix(in oklab, var(--live) 10%, transparent);
+  font-size: 0.9rem;
+}
+.won[hidden] { display: none; }
+
+/* Rows -------------------------------------------------------------------- */
+
+table { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: 0.82rem; }
+th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); }
+th { color: var(--muted-foreground); font-weight: 500; text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.06em; }
+tr:last-child td { border-bottom: 0; }
+.empty { color: var(--muted-foreground); font-size: 0.9rem; margin: 0; }
+
+/* Buttons ----------------------------------------------------------------- */
+
+.actions { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--foreground);
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+}
+.btn:hover { border-color: var(--muted-foreground); }
+.btn.solid { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
+
+footer {
+  margin-top: 3rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-size: 0.82rem;
+}
+footer a { color: inherit; }
