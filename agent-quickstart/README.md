@@ -36,9 +36,13 @@ outplane app create <APP_NAME> \
   --public-repo \
   --dir agent-quickstart \
   --port 8080:http:public \
-  --env DATABASE_URL="$(outplane db url quickstartdb --json --fields url)" \
+  --env DATABASE_URL="$(outplane db url quickstartdb)" \
   --json
 ```
+
+`outplane db url` on its own prints the bare connection string, which is what the
+substitution needs. Adding `--json` would put a JSON object into the variable instead. The
+value is never echoed back by `app create`, which reports `envCount` and not the value.
 
 Then follow the deployment and read the address:
 
@@ -46,6 +50,9 @@ Then follow the deployment and read the address:
 outplane deploy get <DEPLOYMENT_ID> <APP_NAME> --json --fields status
 outplane app get <APP_NAME> --json --fields status,url
 ```
+
+The build takes under a minute. `status` moves `queued` to `building` to `deploying` to
+`ready`, and the address is in `url` once it does.
 
 The full procedure, including what to do with every failure along the way, is at
 [docs.outplane.com/docs/cli/agents](https://docs.outplane.com/docs/cli/agents).
@@ -57,8 +64,12 @@ outplane app delete <APP_NAME>
 outplane db delete quickstartdb
 ```
 
-Both are destructive, so both stop and ask first. The database is a separate resource:
-deleting the application on its own leaves it running.
+Delete the application first, since the database is what it is holding open. Both are
+destructive, so both stop and hand back the exact command that would proceed. Running under
+a coding agent they refuse whatever flags they are given, including `--yes` and
+`--confirm-name`, so these two are the person's to run.
+
+The database is a separate resource. Deleting the application on its own leaves it running.
 
 ## Run it locally
 
@@ -70,7 +81,7 @@ Then open `http://localhost:8080`. With no `DATABASE_URL` it serves the page and
 database is missing. To run it against a real one:
 
 ```bash
-DATABASE_URL="$(outplane db url quickstartdb --json --fields url)" go run .
+DATABASE_URL="$(outplane db url quickstartdb)" go run .
 ```
 
 With Docker:
